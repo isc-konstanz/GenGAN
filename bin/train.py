@@ -5,16 +5,36 @@ import os
 
 
 def train_model(name):
-    # This function implicitely defines a number of conventions. The first convention defined is the
-    # fact that the module name of the model, the class containing the model and the config file
-    # pertaining to the model should all have the same name. The next convention defined is the
-    # presence of the sections "Database_Parameters" and "Model_Parameters" in all config files
-    # that configure a trainable gan network. Finally the last convetion here is the relative position
-    # of the bin files and the conf files that being "..\\conf\\model.cfg". One more, each model
-    # should be fully defined upons instantiation and contain the function train which will be called
-    # here. All trained models should be stored in a dictionary with there model_name acting as their
-    # key. All train functions should take training data and epochs as inputs. Naming convention
+    """trains a GAN model for data generation
 
+    :param name: name of desired GAN model
+    :type name: str
+
+    ..notes:: This function saves the trained models components to the results
+    directory if any components saved have the same name as the components of
+    a previous model trained by this function, the previous results will be
+    overwritten.
+
+    This function implicitely defines a number of important conventions:
+
+        1. The sections 'Aliases', 'Database Parameters',  and
+           'Model_Parameters' must be present in all config files.
+
+        2. The relative path between the bin dir and conf dir must be
+           "..\\conf\\model.cfg".
+
+        3. All models present in the model dir should be built upon
+           instantiation, and should naturally have their own train function
+           called here. Furthermore the input of the class defined train
+           function should receive the batched training data and number of
+           epochs as input.
+
+        4. All model classes should store the objects describing their
+           components in a dictionary called model.
+
+        5. All models are assumed to end in 'gan' (not case sensitive) and
+           be preceded by one word (e.g. TimeGAN, time_gan, time_GAN).
+    """
     # Dynamically retrieve module corresponding to name
     model_aliases = select_model(name)
     module = importlib.import_module(('models.'+model_aliases['module_name'].split('.')[0]))
@@ -37,12 +57,34 @@ def train_model(name):
 
 
 def save_model(model):
+    """saves model to the results directory
+
+    :param model: dictionary containing keras.model objects
+    :type model: dict
+
+    ..notes:: The function implicitely defines the convention that
+    all model classes should store the objects describing their
+    components in a dictionary called model.
+    """
     os.chdir("..\\results")
     for component_name, model in model.model.items():
         model.save(component_name)
 
 
 def select_model(name):
+    """returns conf, module, and class names for a selected model
+
+    :param name: string indicating the selected model
+    :type name: str
+
+    :return kwargs: dictionary containing the conf, module, and
+    class names associated with the selected model
+    :rtype kwargs: dict
+
+    ..notes:: This function explicitely defines the convention that
+    all models are assumed to end in 'gan' (not case sensitive) and
+    be preceded by one word (e.g. TimeGAN, time_gan, time_GAN).
+    """
 
     latent_target = ''.join(name.split('_')).upper()
     models = []
