@@ -16,30 +16,9 @@ def train_model(name):
     # key. All train functions should take training data and epochs as inputs. Naming convention
 
     # Dynamically retrieve module corresponding to name
-    latent_target = ''.join(name.split('_')).upper()
-    for model_py in os.listdir('..\\models'):
-        model = os.path.splitext(model_py)[0]
-        latent_name = ''.join(model.split('_')).upper()
-        if latent_name == latent_target:
-            module = importlib.import_module('models.'+model)
-        else:
-            continue
-
-    # Retrieve the relevant model class
-    try:
-        letters = list(latent_target)
-        class_name = letters[0] + ''.join(letters[1:-3]).lower() + ''.join(letters[-3:])
-        conf_name = ''.join(letters[:-3]).lower() + '_' + ''.join(letters[-3:]).lower() + '.cfg'
-        model_type = getattr(module, class_name)
-
-    except:
-        list_models = [a for a in os.listdir('..\\models') if a.endswith('gan')]
-        print('Please choose one of the following implemented models:')
-
-        i = 1
-        for model in list_models:
-            print('{}.'.format(i) + model)
-            i += 1
+    model_aliases = select_model(name)
+    module = importlib.import_module(('models.'+model_aliases['module_name'].split('.')[0]))
+    model_type = getattr(module, model_aliases['class_name'])
 
     # Dynamically retrieve database configs
     base_file = os.path.join("..", "conf", "base_model.cfg")
@@ -47,17 +26,44 @@ def train_model(name):
 
     # prepare data and instantiate model class
     np_data = prepare_data(**kwargs)
-    model_file = os.path.join("..", "conf", conf_name)
+    model_file = os.path.join("..", "conf", model_aliases['conf_name'])
     kwargs = {**parse_kwargs(model_file, "Model_Parameters"),
               **parse_kwargs(base_file, "Model_Parameters")}
     model = model_type(**kwargs)
 
     model.train(np_data)
 
+    return model
+
+
+def save_model(model):
     os.chdir("..\\results")
     for component_name, model in model.model.items():
-        model.save(os.path.join(class_name, component_name))
+        model.save(component_name)
+
+
+def select_model(name):
+
+    latent_target = ''.join(name.split('_')).upper()
+    models = []
+    for model_file in os.listdir('..\\conf'):
+
+        model_name = os.path.splitext(model_file)[0]
+        models.append(model_name)
+        latent_name = ''.join(model_name.split('_')).upper()
+        if latent_name == latent_target:
+            model_file = os.path.join('..\\conf', model_file)
+            return parse_kwargs(file=model_file, section='Aliases')
+        else:
+            continue
+
+    raise NotImplementedError('Please choose one of the following implemented'
+                                'models:\n' + '\n'.join(models))
+
 
 if __name__ == '__main__':
-    train_model('SimpleGAN')
+
+    test_gan = train_model('SiMpleGAN')
+    save_model(test_gan)
+
 #main('time_gan')

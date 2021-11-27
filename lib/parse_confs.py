@@ -1,7 +1,9 @@
 from configparser import ConfigParser
 import json
 
+
 def parse_kwargs(file, section):
+
     parameters = ConfigParser()
     parameters.read(file)
 
