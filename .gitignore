@@ -4,9 +4,8 @@ lib/__pycache__/
 
 # outputs
 results/
-
-# models
-models/
+hist/
+evaluation/
 
 #database
 databi/
