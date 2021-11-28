@@ -1,6 +1,6 @@
 # pycharm project files
 .idea/
-lib/__pycache__
+lib/__pycache__/
 
 # outputs
 results/
@@ -10,3 +10,6 @@ models/
 
 #database
 databi/
+
+#conf
+conf/
