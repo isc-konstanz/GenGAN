@@ -42,7 +42,8 @@ class TimeGAN(BaseModel):
         self.hidden_dim = hidden_dim
         self.gamma = gamma
         self.epochs = epochs
-        super().__init__(targets, batch_size, seq_len, epochs)
+        # ToDo: consider putting kwargs in __init__
+        super().__init__(targets=targets, batch_size=batch_size, seq_len=seq_len, epochs=epochs)
 
         self.define_gan()
         self.model = {'generator': self.generator_aux, 'supervisor': self.supervisor,
@@ -63,45 +64,45 @@ class TimeGAN(BaseModel):
         #--------------------------------
         # Building the AutoEncoder
         #--------------------------------
-        H = self.embedder(X)
-        X_tilde = self.recovery(H)
+        e_X = self.embedder(X)
+        re_X = self.recovery(e_X)
 
-        self.autoencoder = Model(inputs=X, outputs=X_tilde)
+        self.autoencoder = Model(inputs=X, outputs=re_X)
 
         #---------------------------------
         # Adversarial Supervise Architecture
         #---------------------------------
-        E_Hat = self.generator_aux(Z)
-        H_hat = self.supervisor(E_Hat)
-        Y_fake = self.discriminator(H_hat)
+        g_Z = self.generator_aux(Z)
+        sg_Z = self.supervisor(g_Z)
+        dsg_Z = self.discriminator(sg_Z)
 
-        self.adversarial_supervised = Model(inputs=Z,
-                                       outputs=Y_fake,
-                                       name='AdversarialSupervised')
+        self.dsg_Z_model = Model(inputs=Z,
+                                 outputs=dsg_Z,
+                                 name='AdversarialSupervised')
 
         #---------------------------------
         # Adversarial architecture in latent space
         #---------------------------------
-        Y_fake_e = self.discriminator(E_Hat)
+        dg_Z = self.discriminator(g_Z)
 
-        self.adversarial_embedded = Model(inputs=Z,
-                                    outputs=Y_fake_e,
-                                    name='AdversarialEmbedded')
+        self.dg_Z_model = Model(inputs=Z,
+                                outputs=dg_Z,
+                                name='AdversarialEmbedded')
         # ---------------------------------
         # Synthetic data generation
         # ---------------------------------
-        X_hat = self.recovery(H_hat)
-        self.generator = Model(inputs=Z,
-                            outputs=X_hat,
-                            name='FinalGenerator')
+        rsg_Z = self.recovery(sg_Z)
+        self.rsg_Z_model = Model(inputs=Z,
+                                 outputs=rsg_Z,
+                                 name='FinalGenerator')
 
         # --------------------------------
         # Final discriminator model
         # --------------------------------
-        Y_real = self.discriminator(H)
-        self.discriminator_model = Model(inputs=X,
-                                         outputs=Y_real,
-                                         name="RealDiscriminator")
+        de_X = self.discriminator(e_X)
+        self.de_X_model = Model(inputs=X,
+                                outputs=de_X,
+                                name="RealDiscriminator")
 
         # ----------------------------
         # Define the loss functions
@@ -113,8 +114,8 @@ class TimeGAN(BaseModel):
     @function
     def train_autoencoder(self, x, opt):
         with GradientTape() as tape:
-            x_tilde = self.autoencoder(x)
-            embedding_loss_t0 = self._mse(x, x_tilde)
+            re_x = self.autoencoder(x)
+            embedding_loss_t0 = self._mse(x, re_x)
             e_loss_0 = 10 * sqrt(embedding_loss_t0)
 
         var_list = self.embedder.trainable_variables + self.recovery.trainable_variables
@@ -123,29 +124,34 @@ class TimeGAN(BaseModel):
         return sqrt(embedding_loss_t0)
 
     @function
-    def train_supervisor(self, x, opt):
+    def train_supervisor(self, x, z, opt):
         with GradientTape() as tape:
-            h = self.embedder(x)
-            h_hat_supervised = self.supervisor(h)
-            generator_loss_supervised = self._mse(h[:, 1:, :], h_hat_supervised[:, :-1, :])
+            e_x = self.embedder(x)
+            g_z = self.generator_aux(z)
+            sg_z = self.supervisor(g_z)
+            generator_loss_supervised = self._mse(e_x, sg_z)
 
-        var_list = self.supervisor.trainable_variables + self.generator.trainable_variables
+        # ToDo it should be considered whether the generator should be allowed to change its weights
+        # so as to improve the supervised loss function, or whether the generator should solely
+        # concern itself with the adversarial loss of the network.
+        var_list = self.supervisor.trainable_variables + self.rsg_Z_model.trainable_variables
         gradients = tape.gradient(generator_loss_supervised, var_list)
         apply_grads = [(grad, var) for (grad, var) in zip(gradients, var_list) if grad is not None]
         opt.apply_gradients(apply_grads)
         return generator_loss_supervised
 
     @function
-    def train_embedder(self,x, opt):
+    def train_embedder(self, x, z, opt):
         with GradientTape() as tape:
             # Supervised Loss
-            h = self.embedder(x)
-            h_hat_supervised = self.supervisor(h)
-            generator_loss_supervised = self._mse(h[:, 1:, :], h_hat_supervised[:, :-1, :])
+            e_x = self.embedder(x)
+            g_z = self.generator_aux(z)
+            sg_z = self.supervisor(g_z)
+            generator_loss_supervised = self._mse(e_x, sg_z)
 
             # Reconstruction Loss
-            x_tilde = self.autoencoder(x)
-            embedding_loss_t0 = self._mse(x, x_tilde)
+            re_x = self.autoencoder(x)
+            embedding_loss_t0 = self._mse(x, re_x)
             e_loss = 10 * sqrt(embedding_loss_t0) + 0.1 * generator_loss_supervised
 
         var_list = self.embedder.trainable_variables + self.recovery.trainable_variables
@@ -155,16 +161,16 @@ class TimeGAN(BaseModel):
 
     def discriminator_loss(self, x, z):
         # Loss on false negatives
-        y_real = self.discriminator_model(x)
+        y_real = self.de_X_model(x)
         discriminator_loss_real = self._bce(y_true=ones_like(y_real),
                                             y_pred=y_real)
 
         # Loss on false positives
-        y_fake = self.adversarial_supervised(z)
+        y_fake = self.dsg_Z_model(z)
         discriminator_loss_fake = self._bce(y_true=zeros_like(y_fake),
                                             y_pred=y_fake)
 
-        y_fake_e = self.adversarial_embedded(z)
+        y_fake_e = self.dg_Z_model(z)
         discriminator_loss_fake_e = self._bce(y_true=zeros_like(y_fake_e),
                                               y_pred=y_fake_e)
         return (discriminator_loss_real +
@@ -182,29 +188,30 @@ class TimeGAN(BaseModel):
     @function
     def train_generator(self, x, z, opt):
         with GradientTape() as tape:
-            y_fake = self.adversarial_supervised(z)
-            generator_loss_unsupervised = self._bce(y_true=ones_like(y_fake),
-                                                    y_pred=y_fake)
+            dsg_z = self.dsg_Z_model(z)
+            dsg_loss_generator = self._bce(y_true=ones_like(dsg_z),
+                                                    y_pred=dsg_z)
 
-            y_fake_e = self.adversarial_embedded(z)
-            generator_loss_unsupervised_e = self._bce(y_true=ones_like(y_fake_e),
-                                                      y_pred=y_fake_e)
-            h = self.embedder(x)
-            h_hat_supervised = self.supervisor(h)
-            generator_loss_supervised = self._mse(h[:, 1:, :], h_hat_supervised[:, :-1, :])
+            dg_z = self.dg_Z_model(z)
+            dg_loss_generator = self._bce(y_true=ones_like(dg_z),
+                                                      y_pred=dg_z)
+            e_x = self.embedder(x)
+            g_z = self.generator_aux(z)
+            sg_z = self.supervisor(g_z)
+            sg_loss = self._mse(e_x, sg_z)
 
-            x_hat = self.generator(z)
-            generator_moment_loss = self.calc_generator_moments_loss(x, x_hat)
+            rsg_z = self.rsg_Z_model(z)
+            generator_moment_loss = self.calc_generator_moments_loss(x, rsg_z)
 
-            generator_loss = (generator_loss_unsupervised +
-                              generator_loss_unsupervised_e +
-                              100 * sqrt(generator_loss_supervised) +
+            generator_loss = (dsg_loss_generator +
+                              dg_loss_generator +
+                              100 * sqrt(sg_loss) +
                               100 * generator_moment_loss)
 
         var_list = self.generator_aux.trainable_variables + self.supervisor.trainable_variables
         gradients = tape.gradient(generator_loss, var_list)
         opt.apply_gradients(zip(gradients, var_list))
-        return generator_loss_unsupervised, generator_loss_supervised, generator_moment_loss
+        return dsg_loss_generator, sg_loss, generator_moment_loss
 
     @function
     def train_discriminator(self, x, z, opt):
@@ -240,7 +247,8 @@ class TimeGAN(BaseModel):
         supervisor_opt = Adam(learning_rate=self.lr)
         for _ in tqdm(range(self.epochs), desc='Supervised network training'):
             X_ = next(self.get_batch_data(data, n_windows=len(data)))
-            step_g_loss_s = self.train_supervisor(X_, supervisor_opt)
+            Z_ = next(self.get_batch_noise())
+            step_g_loss_s = self.train_supervisor(X_, Z_, supervisor_opt)
 
         ## Joint training
         generator_opt = Adam(learning_rate=self.lr)
@@ -263,7 +271,7 @@ class TimeGAN(BaseModel):
                 # --------------------------
                 # Train the embedder
                 # --------------------------
-                step_e_loss_t0 = self.train_embedder(X_, embedder_opt)
+                step_e_loss_t0 = self.train_embedder(X_, Z_, embedder_opt)
 
             X_ = next(self.get_batch_data(data, n_windows=len(data)))
             Z_ = next(self.get_batch_noise())
@@ -276,7 +284,7 @@ class TimeGAN(BaseModel):
         data = []
         for _ in trange(steps, desc='Synthetic data generation'):
             Z_ = next(self.get_batch_noise())
-            records = self.generator(Z_)
+            records = self.rsg_Z_model(Z_)
             data.append(records)
         return np.array(np.vstack(data))
 
