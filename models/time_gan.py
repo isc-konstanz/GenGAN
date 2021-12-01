@@ -46,9 +46,9 @@ class TimeGAN(BaseModel):
         super().__init__(targets=targets, batch_size=batch_size, seq_len=seq_len, epochs=epochs)
 
         self.define_gan()
-        self.model = {'generator': self.generator_aux, 'supervisor': self.supervisor,
-                      'discriminator': self.discriminator, 'recovery': self.recovery,
-                      'embedder': self.embedder}
+        self.model = {'generator': self.rsg_Z_model, 'generator_aux': self.generator_aux,
+                      'supervisor': self.supervisor, 'discriminator': self.discriminator,
+                      'recovery': self.recovery, 'embedder': self.embedder}
 
     def define_gan(self):
 
