@@ -1,6 +1,10 @@
 # pycharm project files
 .idea/
 lib/__pycache__/
+models/__pycache__/
+bin/__pycache__/
+evaluators/__pycache__/
+
 
 # outputs
 results/
