@@ -35,7 +35,7 @@ def evaluate_model(model, **eval_kwargs):
     """
 
     nn_param = model.__dict__
-    batch_sample = sample(model.model['generator'], **nn_param)
+    batch_sample = sample(**nn_param)
 
     for e, value in eval_kwargs.items():
         if value == True:
@@ -113,25 +113,12 @@ def sample(generator, batch_size, seq_len, n_seq, **nn_param):
 
 if __name__ == '__main__':
 
-    from lib.parse_confs import parse_kwargs
-    from bin.train import select_model
+    from bin.train import retrieve_params, instantiate_model
     from tensorflow.keras.models import load_model
-    import importlib
 
-    aliases = select_model('TimeGan')
-
+    aliases, _, nn_params, eval_params = retrieve_params('TimeGan')
+    model = instantiate_model(aliases, nn_params)
     model_path = os.path.join('..', 'results')
-    conf_file = os.path.join('..', 'conf', aliases['conf_name'])
-    base_file = os.path.join('..', 'conf', 'base_model.cfg')
-
-    module = importlib.import_module(('models.' + aliases['module_name'].split('.')[0]))
-    model_type = getattr(module, aliases['class_name'])
-
-    eval_params = parse_kwargs(conf_file, 'Evaluation')
-    nn_params = {**parse_kwargs(conf_file, "Model_Parameters"),
-              **parse_kwargs(base_file, "Model_Parameters")}
-
-    model = model_type(**nn_params)
-    model.model['generator'] = load_model(os.path.join(model_path, 'generator'))
+    model.generator = load_model(os.path.join(model_path, 'generator'))
     evaluate_model(model, **eval_params)
 
