@@ -8,16 +8,39 @@ import sys
 import matplotlib.pyplot as plt
 from tensorflow import random
 import pandas as pd
-import numpy as np
+import shutil, errno
 
-os.chdir('C:\\Users\\jmw\\Workspace\\th-e-gan\\evaluation')
 
 def _create_eval_dir(name):
 
     if not os.path.isdir(name):
         os.mkdir(name)
+    else:
+        shutil.rmtree(name)
+        os.mkdir(name)
 
     return name
+
+def cache_evaluation(model_name, test_name):
+
+    def _copy_eval(src, dst):
+        try:
+            shutil.copytree(src, dst)
+        except OSError as exc:  # python >2.5
+            if exc.errno in (errno.ENOTDIR, errno.EINVAL):
+                shutil.copy(src, dst)
+            else:
+                raise
+
+    import datetime as dt
+
+    time = dt.datetime.now().strftime('%d_%m_%y')
+
+    source = '.'
+    dest = os.path.join('..', 'hist', time, model_name, test_name)
+
+    _copy_eval(source, dest)
+
 
 def evaluate_model(model, **eval_kwargs):
     """carry out the evaluation of a model instance as configured in the configs.
@@ -38,9 +61,12 @@ def evaluate_model(model, **eval_kwargs):
     batch_sample = sample(**nn_param)
 
     for e, value in eval_kwargs.items():
-        if value == True:
+        if value == True and e != 'cache':
             eval_func = getattr(sys.modules[__name__], e)
             eval_func(batch_sample, **nn_param)
+
+    if eval_params['cache'] == True:
+        cache_evaluation(aliases['class_name'], aliases['eval_name'])
 
 # ToDo: All plots should plot the unscaled features.
 def _plot_features(data:pd.Series, y_label:str, file:str, **nn_param):
@@ -72,11 +98,12 @@ def plot_batch(batch_data, **nn_param):
     for i in range(20):
         r_list.append(randint(0, nn_param['batch_size']))
 
-    for r_index in r_list:
+    for target in nn_param['targets']:
 
-        data = pd.DataFrame(batch_data[r_index], columns=nn_param['targets'])
-        for target in data.columns:
-            _create_eval_dir(os.path.join(eval_dir, target))
+        _create_eval_dir(os.path.join(eval_dir, target))
+        for r_index in r_list:
+
+            data = pd.DataFrame(batch_data[r_index], columns=[target])
             f_name = os.path.join(eval_dir, target, 'sample {}'.format(r_index))
             _plot_features(data[target], target, f_name, **nn_param)
 
@@ -121,4 +148,3 @@ if __name__ == '__main__':
     model_path = os.path.join('..', 'results')
     model.generator = load_model(os.path.join(model_path, 'generator'))
     evaluate_model(model, **eval_params)
-
