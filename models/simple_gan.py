@@ -18,6 +18,8 @@ class SimpleGAN(BaseModel):
     def __init__(self, targets, batch_size, seq_len, n_seq, seed_size, epochs, critic_steps, clip):
 
         self.seed_size = seed_size
+        self.n_seq = n_seq
+        self.seq_len= seq_len
         self.output_dim = (seq_len, n_seq)
         self.critic_steps = critic_steps
         self.generator_optimizer = RMSprop(learning_rate=0.00005)
