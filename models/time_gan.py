@@ -95,6 +95,7 @@ class TimeGAN(BaseModel):
         self.rsg_Z_model = Model(inputs=Z,
                                  outputs=rsg_Z,
                                  name='FinalGenerator')
+        self.generator = self.rsg_Z_model
 
         # --------------------------------
         # Final discriminator model
