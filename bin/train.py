@@ -1,5 +1,6 @@
 from lib.prep_data import prepare_data
 from lib.parse_confs import parse_kwargs, select_model
+from evaluators.evaluate import evaluate_model
 import importlib
 import os
 
@@ -88,7 +89,7 @@ def main(model_name):
     np_data = prepare_data(**data_params)
     test_gan.train(np_data)
     save_model(test_gan.model)
-
+    evaluate_model(test_gan, **eval_params)
 
 if __name__ == '__main__':
 

@@ -33,7 +33,7 @@ def evaluate_model(model, **eval_kwargs):
     and not the raw tensorflow object. The reason being, that it is assumed that
     all class attributes are still accessible in each of the evaluation functions.
     """
-
+    os.chdir('..\\evaluation')
     nn_param = model.__dict__
     batch_sample = sample(**nn_param)
 
